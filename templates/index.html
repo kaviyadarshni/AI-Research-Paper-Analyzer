@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Research Paper Summarizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-2xl">
+        <h1 class="text-2xl font-bold mb-6 text-center">Research Paper Summarizer</h1>
+        <form id="upload-form" enctype="multipart/form-data" class="space-y-4">
+            <div>
+                <label for="file" class="block text-sm font-medium text-gray-700">Upload PDF</label>
+                <input type="file" id="file" name="file" accept=".pdf" class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+            </div>
+            <button type="submit" class="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600">Summarize</button>
+        </form>
+        <div id="loading" class="hidden mt-4 flex justify-center">
+            <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+        <div id="result" class="mt-6 hidden">
+            <h2 class="text-lg font-semibold mb-2">Summary (250 words)</h2>
+            <p id="summary-text" class="text-gray-700"></p>
+            <p id="metadata" class="text-sm text-gray-500 mt-2"></p>
+            <p id="error-text" class="text-red-500 hidden"></p>
+        </div>
+        <div id="chat-section" class="mt-6 hidden">
+            <h2 class="text-lg font-semibold mb-2">Ask Questions About the Paper</h2>
+            <div id="chat-history" class="max-h-64 overflow-y-auto border p-4 rounded mb-4"></div>
+            <form id="question-form" class="flex space-x-2">
+                <input type="text" id="question-input" placeholder="Ask a question..." class="flex-1 p-2 border rounded">
+                <button type="submit" class="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600">Ask</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Handle PDF upload
+        document.getElementById('upload-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const resultDiv = document.getElementById('result');
+            const summaryText = document.getElementById('summary-text');
+            const errorText = document.getElementById('error-text');
+            const loadingDiv = document.getElementById('loading');
+            const metadataText = document.getElementById('metadata');
+            const chatSection = document.getElementById('chat-section');
+
+            loadingDiv.classList.remove('hidden');
+            resultDiv.classList.add('hidden');
+            chatSection.classList.add('hidden');
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+
+                loadingDiv.classList.add('hidden');
+                resultDiv.classList.remove('hidden');
+                if (data.summary) {
+                    summaryText.textContent = data.summary;
+                    metadataText.textContent = `Pages: ${data.page_count || 'N/A'}, Text Length: ${data.text_length || 'N/A'} characters`;
+                    summaryText.classList.remove('hidden');
+                    errorText.classList.add('hidden');
+                    chatSection.classList.remove('hidden');
+                } else {
+                    errorText.textContent = data.error;
+                    errorText.classList.remove('hidden');
+                    summaryText.classList.add('hidden');
+                }
+            } catch (error) {
+                loadingDiv.classList.add('hidden');
+                resultDiv.classList.remove('hidden');
+                errorText.textContent = 'Error uploading file: ' + error.message;
+                errorText.classList.remove('hidden');
+                summaryText.classList.add('hidden');
+            }
+        });
+
+        // Handle question submission
+        document.getElementById('question-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const questionInput = document.getElementById('question-input');
+            const question = questionInput.value.trim();
+            const chatHistory = document.getElementById('chat-history');
+            const loadingDiv = document.getElementById('loading');
+
+            if (!question) return;
+
+            const userMessage = document.createElement('p');
+            userMessage.className = 'text-blue-600 font-semibold';
+            userMessage.textContent = `You: ${question}`;
+            chatHistory.appendChild(userMessage);
+
+            loadingDiv.classList.remove('hidden');
+
+            try {
+                const response = await fetch('/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question })
+                });
+                const data = await response.json();
+
+                loadingDiv.classList.add('hidden');
+
+                const botMessage = document.createElement('p');
+                botMessage.className = 'text-gray-700';
+                botMessage.textContent = data.answer ? `Bot: ${data.answer}` : `Error: ${data.error}`;
+                chatHistory.appendChild(botMessage);
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+            } catch (error) {
+                loadingDiv.classList.add('hidden');
+                const errorMessage = document.createElement('p');
+                errorMessage.className = 'text-red-500';
+                errorMessage.textContent = `Error: ${error.message}`;
+                chatHistory.appendChild(errorMessage);
+            }
+
+            questionInput.value = '';
+        });
+    </script>
+</body>
+</html>
